@@ -1,3 +1,5 @@
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using TMPro;
 using UnityEngine;
@@ -18,7 +20,17 @@ public class UIManager : MonoBehaviour
     public TMP_InputField quantityInput;
     public TMP_Dropdown almacenDropdown;
     public TMP_InputField exportNameInput;
+    public TMP_Dropdown fileDropdown;
     public TMP_Text debugText;
+
+    [Header("Busqueda Productos")]
+    public TMP_InputField searchInput;
+    public UIListaCSV listaProductos;
+
+    void Start()
+    {
+        LoadAvailableFiles();
+    }
 
     private void Update()
     {
@@ -42,14 +54,85 @@ public class UIManager : MonoBehaviour
 
         movementManager.AddMovement(reference, name, cantidad, almacen);
 
-        LogMessage($"Guardado: {reference} - {name} - {cantidad} - {almacen}");
+        MessageToast.Instance.ShowMessage($"Guardado: {reference} - {name} - {cantidad} - {almacen}");
+        LoadAvailableFiles();
+    }
+
+    public void LoadAvailableFiles()
+    {
+        fileDropdown.ClearOptions();
+        List<string> options = new List<string>();
+
+        string basePath = "/storage/emulated/0/Bodega BM/";
+        string[] folders = { "Salidas", "Exportados", "Salidas Bodega" };
+
+        foreach (var folder in folders)
+        {
+            string dir = Path.Combine(basePath, folder);
+            if (Directory.Exists(dir))
+            {
+                foreach (var file in Directory.GetFiles(dir, "*.csv"))
+                {
+                    // ⛔ ignorar backups
+                    if (file.Contains("-bak-"))
+                        continue;
+
+                    string fileName = Path.GetFileNameWithoutExtension(file); // MiArchivo-2025-09-09
+                    string displayName = fileName;
+
+                    // si tiene formato con fecha al final
+                    int idx = fileName.LastIndexOf('-');
+                    if (idx > 0)
+                    {
+                        string maybeDate = fileName.Substring(idx + 1); // 2025-09-09
+                        if (DateTime.TryParse(maybeDate, out DateTime fecha))
+                        {
+                            string baseName = fileName.Substring(0, idx); // MiArchivo
+                            string diaMes = fecha.ToString("dd-MM");       // 09-09
+                            displayName = baseName + "-" + diaMes;
+                        }
+                    }
+
+                    options.Add(folder + "/" + displayName);
+                }
+            }
+        }
+
+        fileDropdown.AddOptions(options);
+        fileDropdown.onValueChanged.AddListener(OnFileSelected);
+    }
+
+    void OnFileSelected(int index)
+    {
+        string option = fileDropdown.options[index].text;
+        string basePath = "/storage/emulated/0/Bodega BM/";
+
+        // reconstruimos la ruta real (con año incluido)
+        string folder = option.Split('/')[0];
+        string displayName = option.Split('/')[1];
+
+        // buscar el archivo real en la carpeta correspondiente
+        string dir = Path.Combine(basePath, folder);
+        foreach (var file in Directory.GetFiles(dir, "*.csv"))
+        {
+            string fileName = Path.GetFileNameWithoutExtension(file);
+            if (fileName.Contains(displayName)) // coincide con el nombre mostrado
+            {
+                movementManager.SetSelectedFile(file);
+
+                // mostrar registros en la UI
+                csvManager.CargarCSV(File.ReadAllLines(file));
+                listaCsv.MostrarRegistros(csvManager.registros);
+                break;
+            }
+        }
     }
 
     public void OnExport()
     {
         string exportName = exportNameInput.text.Trim();
-        if (!string.IsNullOrEmpty(exportName))
-            movementManager.ExportMovements(exportName);
+        movementManager.SaveToExportOrSelected(exportName);
+        LoadAvailableFiles();
     }
 
     public void UpdateName(string result)
@@ -58,12 +141,12 @@ public class UIManager : MonoBehaviour
         if (name != null)
         {
             nameInput.text = name;
-            LogMessage("Nombre de producto: " + name);
+            MessageToast.Instance.ShowMessage("Nombre de producto: " + name);
         }
         else if (result == null || string.IsNullOrEmpty(referenceInput.text))
         {
             nameInput.text = "";
-            LogMessage("Nombre de no encontrado producto");
+            MessageToast.Instance.ShowMessage("Nombre de no encontrado producto");
         }
     }
 
@@ -73,13 +156,40 @@ public class UIManager : MonoBehaviour
         csvManager.CargarCSV(File.ReadAllLines(movementManager.movementsPath));
         listaCsv.MostrarRegistros(FindObjectOfType<CSVManager>()?.registros);
     }
-
-    public void LogMessage(string message)
+    public void UpdateListBaceData()
     {
-        Debug.Log(message); // Tambi�n lo manda a la consola de Unity
-        if (debugText != null)
+        //FindObjectOfType<UIManager>()?.LogMessage(File.ReadAllText(movementManager.movementsPath));
+        csvManager.CargarCSVBaseData(File.ReadAllLines(movementManager.movementsPath));
+        listaProductos.MostrarProductos(FindObjectOfType<CSVManager>()?.productos);
+    }
+
+    public void OnSearchProduct()
+    {
+        string query = searchInput.text.Trim();
+        if (string.IsNullOrEmpty(query))
         {
-            debugText.text += "\n" + message;  // Lo escribe en pantalla
+            MessageToast.Instance.ShowMessage("Escribe algo para buscar.");
+            return;
         }
+
+        // ✅ ahora devuelve List<Producto>
+        var resultados = productManager.Buscar(query);
+
+        if (resultados.Count > 0)
+        {
+            listaProductos.MostrarProductos(resultados); // ✅ recibe List<Producto>
+            MessageToast.Instance.ShowMessage(resultados.Count + " productos encontrados.");
+        }
+        else
+        {
+            MessageToast.Instance.ShowMessage("No se encontraron coincidencias.");
+            listaProductos.MostrarProductos(new List<Producto>()); // ✅ lista vacía de Producto
+        }
+    }
+
+    // ✅ corregido: ahora recibe List<Producto>, no tuplas
+    void MostrarResultadosProductos(List<Producto> productos)
+    {
+        listaProductos.MostrarProductos(productos);
     }
 }

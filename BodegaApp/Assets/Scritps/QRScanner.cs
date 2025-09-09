@@ -1,7 +1,9 @@
-using UnityEngine;
+Ôªøusing UnityEngine;
 using UnityEngine.UI;
 using ZXing;
+using ZXing.Common;
 using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using Unity.VisualScripting;
 using UnityEngine.Android;
@@ -9,12 +11,12 @@ using UnityEngine.Android;
 public class QRScanner : MonoBehaviour
 {
     [Header("UI Elements")]
-    public RawImage cameraPreview;       // RawImage para mostrar la c·mara
+    public RawImage cameraPreview;       // RawImage para mostrar la c√°mara
     public AspectRatioFitter aspectRatioFitter;
     public TMP_InputField referenceInput;    // Campo de texto donde va la referencia
     public TMP_InputField nameInput;    // Campo de texto donde va el nombre
-    public Button toggleCameraButton;    // BotÛn para activar/desactivar c·mara
-    public TMP_Text toggleButtonText;        // Texto del botÛn (ej: "Activar c·mara")
+    public Button toggleCameraButton;    // Bot√≥n para activar/desactivar c√°mara
+    public TMP_Text toggleButtonText;        // Texto del bot√≥n (ej: "Activar c√°mara")
 
     private WebCamTexture camTexture;
     private bool isScanning = false;
@@ -22,7 +24,23 @@ public class QRScanner : MonoBehaviour
 
     void Start()
     {
-        reader = new BarcodeReader();
+        reader = new BarcodeReader
+        {
+            AutoRotate = true,
+            Options = new DecodingOptions
+            {
+                TryInverted = true,
+                PossibleFormats = new List<BarcodeFormat>
+            {
+                BarcodeFormat.QR_CODE,
+                BarcodeFormat.CODE_128,
+                BarcodeFormat.EAN_13,
+                BarcodeFormat.UPC_A,
+                BarcodeFormat.CODE_39,
+                BarcodeFormat.ITF
+            }
+            }
+        };
 
         if (toggleCameraButton != null)
             toggleCameraButton.onClick.AddListener(ToggleCamera);
@@ -64,8 +82,8 @@ public class QRScanner : MonoBehaviour
         }
         else
         {
-            Debug.LogError("No se encontrÛ ninguna c·mara en el dispositivo.");
-            FindObjectOfType<UIManager>()?.LogMessage("No se encontrÛ ninguna c·mara en el dispositivo.");
+            Debug.LogError("No se encontr√≥ ninguna c√°mara en el dispositivo.");
+            MessageToast.Instance.ShowMessage("No se encontr√≥ ninguna c√°mara en el dispositivo.");
         }
     }
 
@@ -95,7 +113,8 @@ public class QRScanner : MonoBehaviour
                     {
                         // Poner el texto del QR en el campo editable
                         referenceInput.text = result.Text;
-                        FindObjectOfType<UIManager>()?.LogMessage("CÛdigo detectado: " + result.Text);
+                        //nameInput.text = FindObjectOfType<ProductManager>()?.GetProductName(result.Text);
+                        MessageToast.Instance.ShowMessage("C√≥digo detectado: " + result.Text);
                         referenceInput.onEndEdit.Invoke(referenceInput.text);
                     }
                 }
@@ -103,7 +122,7 @@ public class QRScanner : MonoBehaviour
             catch (System.Exception ex)
             {
                 Debug.LogWarning("Error al decodificar: " + ex.Message);
-                FindObjectOfType<UIManager>()?.LogMessage("Error al decodificar: " + ex.Message);
+                MessageToast.Instance.ShowMessage("Error al decodificar: " + ex.Message);
             }
 
             yield return null; // esperar al siguiente frame
@@ -114,7 +133,7 @@ public class QRScanner : MonoBehaviour
     {
         if (toggleButtonText != null)
         {
-            toggleButtonText.text = isScanning ? "Desactivar c·mara" : "Activar c·mara";
+            toggleButtonText.text = isScanning ? "Desactivar c√°mara" : "Activar c√°mara";
         }
     }
 }

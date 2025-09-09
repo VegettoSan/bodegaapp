@@ -1,13 +1,24 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Data.SqlTypes;
 using System.IO;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Android;
+
+[System.Serializable]
+public class Producto
+{
+    public string referencia;
+    public string nombre;
+    public string precioVenta;
+    public string codigoInterno;
+}
 
 public class ProductManager : MonoBehaviour
 {
     private string productsPath;
     private Dictionary<string, string> products = new Dictionary<string, string>();
+    private List<Producto> productos = new List<Producto>();
 
     void Awake()
     {
@@ -31,30 +42,45 @@ public class ProductManager : MonoBehaviour
         if (!Directory.Exists(rutaCompleta))
         {
             Directory.CreateDirectory(rutaCompleta);
-            FindObjectOfType<UIManager>()?.LogMessage("Carpeta creada en: " + rutaCompleta);
+            //MessageToast.Instance.ShowMessage("Carpeta creada en: " + rutaCompleta);
         }
         else
         {
-            FindObjectOfType<UIManager>()?.LogMessage("La carpeta ya existe en: " + rutaCompleta);
+            //MessageToast.Instance.ShowMessage("La carpeta ya existe en: " + rutaCompleta);
         }
-        productsPath = Path.Combine(rutaCompleta + "/", "productos.csv");
+        productsPath = Path.Combine(rutaCompleta + "/", "data.csv");
 
         LoadProducts();
     }
 
     void LoadProducts()
     {
-        products.Clear();
+        productos.Clear();
         if (!File.Exists(productsPath))
         {
-            FindObjectOfType<UIManager>()?.LogMessage("Archivo Base no encontrado en " + productsPath);
+            //MessageToast.Instance.ShowMessage("Archivo Base no encontrado en " + productsPath);
+            Invoke("LoadProducts",3f);
             return;
         }
 
-        FindObjectOfType<UIManager>()?.LogMessage("Archivo Base encontrado en " + productsPath);
-        //FindObjectOfType<UIManager>()?.LogMessage(File.ReadAllText(productsPath));
-        
-        foreach (var line in File.ReadAllLines(productsPath))
+        //MessageToast.Instance.ShowMessage("Archivo Base encontrado en " + productsPath);
+
+        var lineas = File.ReadAllLines(productsPath);
+        for (int i = 1; i < lineas.Length; i++) // saltar encabezado
+        {
+            var parts = lineas[i].Split(';');
+            if (parts.Length >= 4)
+            {
+                productos.Add(new Producto
+                {
+                    referencia = parts[0].Trim(),
+                    nombre = parts[1].Trim(),
+                    precioVenta = parts[2].Trim(),
+                    codigoInterno = parts[3].Trim()
+                });
+            }
+        }
+        foreach (var line in lineas)
         {
             var parts = line.Split(';');
             if (parts.Length >= 2)
@@ -65,6 +91,22 @@ public class ProductManager : MonoBehaviour
                     products.Add(reference, name);
             }
         }
+    }
+
+    // 🔍 Buscar por referencia o nombre
+    public List<Producto> Buscar(string query)
+    {
+        query = query.ToLower();
+        var results = new List<Producto>();
+        foreach (var p in productos)
+        {
+            if (p.referencia.ToLower().Contains(query) ||
+                p.nombre.ToLower().Contains(query))
+            {
+                results.Add(p);
+            }
+        }
+        return results;
     }
 
     public string GetProductName(string reference)
@@ -86,7 +128,29 @@ public class ProductManager : MonoBehaviour
         using (StreamWriter writer = new StreamWriter(productsPath, false))
         {
             foreach (var kvp in products)
-                writer.WriteLine($"{kvp.Key},{kvp.Value}");
+                writer.WriteLine($"{kvp.Key};{kvp.Value}");
         }
+    }
+
+    public List<(string referencia, string nombre)> BuscarPorReferencia(string refText)
+    {
+        var results = new List<(string, string)>();
+        foreach (var kvp in products)
+        {
+            if (kvp.Key.Contains(refText, System.StringComparison.OrdinalIgnoreCase))
+                results.Add((kvp.Key, kvp.Value));
+        }
+        return results;
+    }
+
+    public List<(string referencia, string nombre)> BuscarPorNombre(string nameText)
+    {
+        var results = new List<(string, string)>();
+        foreach (var kvp in products)
+        {
+            if (kvp.Value.Contains(nameText, System.StringComparison.OrdinalIgnoreCase))
+                results.Add((kvp.Key, kvp.Value));
+        }
+        return results;
     }
 }
